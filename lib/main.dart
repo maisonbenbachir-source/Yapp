@@ -1,9 +1,20 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+// قاعدة بيانات وهمية للأرقام المسجلة مسبقاً لمنع التكرار
+final Set<String> registeredPhones = {};
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
   runApp(const YappApp());
 }
 
@@ -29,15 +40,14 @@ final Map<String, Map<String, String>> t = {
   'ar': {
     'app_name': 'Yapp',
     'login': 'إنشاء حساب جديد',
-    'subtitle': 'أدخل معلوماتك للبدء بالاستكشاف',
-    'email': 'البريد الإلكتروني',
-    'phone': 'رقم الهاتف (للتحقق SMS)',
+    'subtitle': 'التسجيل برقم الهاتف فقط',
+    'phone_hint': 'رقم الهاتف',
     'dob': 'تاريخ الميلاد (مثال: 1995/05/12)',
-    'next_step': 'متابعة وإرسال الرموز',
-    'verify_title': 'تأكيد الحساب',
-    'verify_desc': 'أدخل الرمز المرسل لهاتفك وإيميلك',
-    'verify_sms': 'رمز الـ SMS',
-    'verify_email': 'رمز تفعيل الإيميل',
+    'next_step': 'إرسال كود التحقق SMS',
+    'phone_exists': 'هذا الرقم مسجل مسبقاً ولديه حساب بالفعل ⚠️',
+    'verify_title': 'تأكيد رقم الهاتف',
+    'verify_desc': 'أدخل كود الـ SMS المرسل إلى هاتفك',
+    'verify_sms': 'كود الـ SMS (اكتب أي 4 أرقام للتجربة)',
     'verify_btn': 'تأكيد ودخول',
     'photo_title': 'توثيق الحساب بالصورة',
     'photo_desc': 'الرجاء رفع صورة حقيقية للوجه لتفعيل حسابك',
@@ -47,22 +57,24 @@ final Map<String, Map<String, String>> t = {
     'btn_face': 'التقاط الوجه الحقيقي',
     'enter_feed': 'الانتقال للرئيسية ➔',
     'blurred_lock': 'الصور مقفلة 🔒\nيجب توثيق صورتك لرؤية الآخرين',
-    'loc_title': 'تحديد الموقع الجغرافي',
-    'loc_desc': 'نحتاج لمعرفة موقعك لنعرض لك الأشخاص القريبين منك',
-    'loc_btn': 'السماح بالوصول للموقع',
+    'loc_title': 'صلاحية الموقع والتنبيهات',
+    'loc_desc': 'نحتاج موقعك للأشخاص القريبين وتفعيل التنبيهات للإشارات',
+    'loc_btn': 'السماح بالموقع والتنبيهات',
+    'rate_title': 'تقييم التطبيق ⭐',
+    'rate_desc': 'قيم Yapp بـ 5 نجوم واحصل على (+2 إعجاب مجاني)!',
+    'rate_btn': 'قيم الآن والحصول على إعجابات',
   },
   'en': {
     'app_name': 'Yapp',
     'login': 'Create Account',
-    'subtitle': 'Enter your details to start',
-    'email': 'Email Address',
-    'phone': 'Phone Number (SMS)',
+    'subtitle': 'Register with phone number only',
+    'phone_hint': 'Phone Number',
     'dob': 'Date of Birth (e.g., 1995/05/12)',
-    'next_step': 'Proceed & Send Codes',
-    'verify_title': 'Account Verification',
-    'verify_desc': 'Enter codes sent to your phone & email',
+    'next_step': 'Send SMS Verification Code',
+    'phone_exists': 'This phone number is already registered ⚠️',
+    'verify_title': 'Verify Phone',
+    'verify_desc': 'Enter the SMS code sent to your phone',
     'verify_sms': 'SMS Code',
-    'verify_email': 'Email Code',
     'verify_btn': 'Verify & Enter',
     'photo_title': 'Face Verification',
     'photo_desc': 'Please upload a real face photo',
@@ -72,13 +84,16 @@ final Map<String, Map<String, String>> t = {
     'btn_face': 'Capture Real Face',
     'enter_feed': 'Go to Feed ➔',
     'blurred_lock': 'Photos Locked 🔒\nVerify photo to view others',
-    'loc_title': 'Location Access',
-    'loc_desc': 'We need your location to show nearby people',
-    'loc_btn': 'Allow Location',
+    'loc_title': 'Location & Notifications',
+    'loc_desc': 'We need location for nearby users and notifications',
+    'loc_btn': 'Allow Location & Notifications',
+    'rate_title': 'Rate App ⭐',
+    'rate_desc': 'Rate 5 stars to get (+2 free likes)!',
+    'rate_btn': 'Rate & Get Likes',
   }
 };
 
-String myEmail = '';
+String selectedCountryCode = '+212';
 String myPhone = '';
 String myDob = '';
 bool hasFace = false;
@@ -92,15 +107,28 @@ class AuthView extends StatefulWidget {
 }
 
 class _AuthViewState extends State<AuthView> {
-  final eCtrl = TextEditingController();
   final pCtrl = TextEditingController();
   final dobCtrl = TextEditingController();
+  String? errorMsg;
 
   void proceed() {
-    if (eCtrl.text.isEmpty || pCtrl.text.isEmpty || dobCtrl.text.isEmpty) return;
-    myEmail = eCtrl.text.trim();
-    myPhone = pCtrl.text.trim();
+    final tr = t[appLang] ?? t['en']!;
+    if (pCtrl.text.isEmpty || dobCtrl.text.isEmpty) return;
+    
+    final fullPhone = '$selectedCountryCode${pCtrl.text.trim()}';
+
+    // التحقق من عدم تكرار رقم الهاتف مسبقاً
+    if (registeredPhones.contains(fullPhone)) {
+      setState(() {
+        errorMsg = tr['phone_exists'];
+      });
+      return;
+    }
+
+    myPhone = fullPhone;
     myDob = dobCtrl.text.trim();
+    registeredPhones.add(myPhone); // تسجيل الرقم في القاعدة
+
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const VerificationView()));
   }
 
@@ -124,10 +152,41 @@ class _AuthViewState extends State<AuthView> {
                   Text(tr['login']!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
                   const SizedBox(height: 5),
                   Text(tr['subtitle']!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                  const SizedBox(height: 25),
-                  TextField(controller: eCtrl, decoration: InputDecoration(labelText: tr['email']!, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), prefixIcon: const Icon(Icons.email))),
-                  const SizedBox(height: 15),
-                  TextField(controller: pCtrl, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: tr['phone']!, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), prefixIcon: const Icon(Icons.phone))),
+                  const SizedBox(height: 20),
+                  if (errorMsg != null)
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      color: Colors.red.shade50,
+                      child: Text(errorMsg!, style: const TextStyle(color: Colors.red, fontSize: 12), textAlign: TextAlign.center),
+                    ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(10)),
+                        child: DropdownButton<String>(
+                          value: selectedCountryCode,
+                          underline: const SizedBox(),
+                          items: const [
+                            DropdownMenuItem(value: '+212', child: Text('+212 (MA)')),
+                            DropdownMenuItem(value: '+33', child: Text('+33 (FR)')),
+                            DropdownMenuItem(value: '+966', child: Text('+966 (SA)')),
+                            DropdownMenuItem(value: '+1', child: Text('+1 (US)')),
+                          ],
+                          onChanged: (val) => setState(() => selectedCountryCode = val!),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: pCtrl,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(labelText: tr['phone_hint']!, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), prefixIcon: const Icon(Icons.phone)),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 15),
                   TextField(controller: dobCtrl, decoration: InputDecoration(labelText: tr['dob']!, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), prefixIcon: const Icon(Icons.calendar_today))),
                   const SizedBox(height: 25),
@@ -154,7 +213,6 @@ class VerificationView extends StatefulWidget {
 
 class _VerificationViewState extends State<VerificationView> {
   final smsCtrl = TextEditingController();
-  final emailCtrl = TextEditingController();
 
   void verifyCodes() {
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LocationPermissionView()));
@@ -180,8 +238,6 @@ class _VerificationViewState extends State<VerificationView> {
                   Text(tr['verify_desc']!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey, fontSize: 13)),
                   const SizedBox(height: 20),
                   TextField(controller: smsCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: tr['verify_sms']!, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), prefixIcon: const Icon(Icons.sms))),
-                  const SizedBox(height: 15),
-                  TextField(controller: emailCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: tr['verify_email']!, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), prefixIcon: const Icon(Icons.mark_email_read))),
                   const SizedBox(height: 25),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
@@ -205,7 +261,7 @@ class LocationPermissionView extends StatefulWidget {
 }
 
 class _LocationPermissionViewState extends State<LocationPermissionView> {
-  Future<void> askLocation() async {
+  Future<void> askPermissions() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (serviceEnabled) {
       LocationPermission permission = await Geolocator.checkPermission();
@@ -217,6 +273,13 @@ class _LocationPermissionViewState extends State<LocationPermissionView> {
         userLocationStr = 'Lat: ${position.latitude.toStringAsFixed(2)}, Lng: ${position.longitude.toStringAsFixed(2)} 📍';
       }
     }
+
+    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+        flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (androidImplementation != null) {
+      await androidImplementation.requestNotificationsPermission();
+    }
+
     if (!mounted) return;
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const PhotoView()));
   }
@@ -237,14 +300,14 @@ class _LocationPermissionViewState extends State<LocationPermissionView> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.location_on, size: 70, color: Colors.pinkAccent),
+                  const Icon(Icons.notifications_active, size: 70, color: Colors.pinkAccent),
                   const SizedBox(height: 20),
-                  Text(tr['loc_desc']!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(tr['loc_desc']!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 30),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    onPressed: askLocation,
-                    child: Text(tr['loc_btn']!, style: const TextStyle(fontSize: 15)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    onPressed: askPermissions,
+                    child: Text(tr['loc_btn']!, style: const TextStyle(fontSize: 14)),
                   ),
                 ],
               ),
@@ -325,18 +388,66 @@ class _FeedViewState extends State<FeedView> {
       likes--;
       uIdx = (uIdx + 1) % users.length;
     });
+    _showNotification();
+  }
+
+  Future<void> _showNotification() async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails('yapp_notifs', 'Yapp Alerts',
+            channelDescription: 'Notifications for new likes',
+            importance: Importance.max,
+            priority: Priority.high);
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      'إعجاب جديد في Yapp! ❤️',
+      'أحدهم أبدى إعجابه بك!',
+      platformChannelSpecifics,
+    );
+  }
+
+  void showRateDialog(BuildContext context) {
+    final tr = t[appLang] ?? t['en']!;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr['rate_title']!),
+        content: Text(tr['rate_desc']!),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                likes += 2; // إضافة 2 إعجاب مجاني عند التقييم
+              });
+              Navigator.pop(context);
+            },
+            child: Text(tr['rate_btn']!),
+          )
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final tr = t[appLang] ?? t['en']!;
     return Scaffold(
-      appBar: AppBar(title: Text('${tr['app_name']!} | ❤️ $likes | DOB: $myDob'), backgroundColor: Colors.pinkAccent),
+      appBar: AppBar(
+        title: Text('${tr['app_name']!} | ❤️ $likes'),
+        backgroundColor: Colors.pinkAccent,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.star),
+            onPressed: () => showRateDialog(context),
+          )
+        ],
+      ),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(8.0),
-            child: Text(userLocationStr, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+            child: Text('$userLocationStr | DOB: $myDob', style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
           ),
           Expanded(
             child: Center(
@@ -375,19 +486,4 @@ class _FeedViewState extends State<FeedView> {
                         child: Container(
                           width: 300,
                           height: 220,
-                          color: Colors.black.withOpacity(0.55),
-                          child: Center(
-                            child: Text(tr['blurred_lock']!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+                          color: Colors.black.withOpacity(0
