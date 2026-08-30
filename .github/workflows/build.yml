@@ -24,11 +24,7 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Create Flutter Project Structure
-        run: |
-          flutter create . --org com.yapp.app --project-name yapp --platforms android
-
-      - name: Get Dependencies and Build
+      - name: Clean and Build
         run: |
           flutter pub get
           flutter build apk --release
