@@ -41,7 +41,6 @@ jobs:
             flutter:
               sdk: flutter
             geolocator: ^13.0.2
-            flutter_local_notifications: ^17.2.2
 
           dev_dependencies:
             flutter_test:
@@ -59,17 +58,9 @@ jobs:
           import 'dart:ui';
           import 'package:flutter/material.dart';
           import 'package:geolocator/geolocator.dart';
-          import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
-          final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
           void main() async {
             WidgetsFlutterBinding.ensureInitialized();
-
-            const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
-            const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
-            await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
             runApp(const YappApp());
           }
 
@@ -108,9 +99,9 @@ jobs:
               'btn_face': 'التقاط وجه حقيقي',
               'enter_feed': 'الدخول إلى Yapp ➔',
               'blurred_lock': 'الصور محجوبة 🔒\nيجب رفع صورتك لتتمكن من الرؤية',
-              'loc_title': 'صلاحية الموقع والتنبيهات',
-              'loc_desc': 'نحتاج موقعك للأشخاص القريبين وتفعيل التنبيهات للإشارات والرسائل',
-              'loc_btn': 'السماح بالموقع والتنبيهات',
+              'loc_title': 'صلاحية الموقع الجغرافي',
+              'loc_desc': 'نحتاج موقعك لنعرض لك الأشخاص القريبين منك بدقة',
+              'loc_btn': 'السماح بالوصول للموقع',
             },
             'en': {
               'app_name': 'Yapp',
@@ -131,9 +122,9 @@ jobs:
               'btn_face': 'Capture Real Face',
               'enter_feed': 'Enter Yapp ➔',
               'blurred_lock': 'Photos Locked 🔒\nUpload your photo to view others',
-              'loc_title': 'Location & Notifications',
-              'loc_desc': 'We need location for nearby users and notifications for incoming messages',
-              'loc_btn': 'Allow Location & Notifications',
+              'loc_title': 'Location Access',
+              'loc_desc': 'We need your location to find nearby people',
+              'loc_btn': 'Allow Location Access',
             }
           };
 
@@ -238,7 +229,7 @@ jobs:
           }
 
           class _LocationPermissionViewState extends State<LocationPermissionView> {
-            Future<void> askPermissions() async {
+            Future<void> askLocation() async {
               bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
               if (serviceEnabled) {
                 LocationPermission permission = await Geolocator.checkPermission();
@@ -249,12 +240,6 @@ jobs:
                   Position position = await Geolocator.getCurrentPosition();
                   userLocationStr = 'Lat: ${position.latitude.toStringAsFixed(2)}, Lng: ${position.longitude.toStringAsFixed(2)} 📍';
                 }
-              }
-
-              final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-                  flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-              if (androidImplementation != null) {
-                await androidImplementation.requestNotificationsPermission();
               }
 
               if (!mounted) return;
@@ -272,13 +257,13 @@ jobs:
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.notifications_active, size: 80, color: Colors.pinkAccent),
+                        const Icon(Icons.location_on, size: 80, color: Colors.pinkAccent),
                         const SizedBox(height: 20),
                         Text(tr['loc_desc']!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 30),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, foregroundColor: Colors.white),
-                          onPressed: askPermissions,
+                          onPressed: askLocation,
                           child: Text(tr['loc_btn']!),
                         ),
                       ],
@@ -352,23 +337,6 @@ jobs:
                 likes--;
                 uIdx = (uIdx + 1) % users.length;
               });
-              _showNotification();
-            }
-
-            Future<void> _showNotification() async {
-              const AndroidNotificationDetails androidPlatformChannelSpecifics =
-                  AndroidNotificationDetails('yapp_notifs', 'Yapp Alerts',
-                      channelDescription: 'Notifications for new likes and messages',
-                      importance: Importance.max,
-                      priority: Priority.high);
-              const NotificationDetails platformChannelSpecifics =
-                  NotificationDetails(android: androidPlatformChannelSpecifics);
-              await flutterLocalNotificationsPlugin.show(
-                0,
-                'تفاعل جديد في Yapp! ❤️',
-                'أحدهم أبدى إعجابه بك، تحقق من التطبيق الآن!',
-                platformChannelSpecifics,
-              );
             }
 
             @override
