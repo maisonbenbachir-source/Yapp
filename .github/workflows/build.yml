@@ -24,16 +24,35 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Create Clean Flutter App
+      - name: Create Clean Flutter App & Correct Pubspec
         run: |
           flutter create . --org com.yapp.app --project-name yapp --platforms android
-        shell: bash
+          
+          # إعادة كتابة ملف pubspec.yaml بالترتيب الصحيح تماماً لتجنب أي أخطاء
+          cat << 'EOF' > pubspec.yaml
+          name: yapp
+          description: "Yapp Matching Application"
+          publish_to: 'none'
+          version: 1.0.0+1
 
-      - name: Add Dependencies to pubspec
-        run: |
-          echo "  google_mobile_ads: ^5.2.0" >> pubspec.yaml
-          echo "  geolocator: ^13.0.2" >> pubspec.yaml
-          echo "  flutter_local_notifications: ^17.2.2" >> pubspec.yaml
+          environment:
+            sdk: '>=3.0.0 <4.0.0'
+
+          dependencies:
+            flutter:
+              sdk: flutter
+            google_mobile_ads: ^5.2.0
+            geolocator: ^13.0.2
+            flutter_local_notifications: ^17.2.2
+
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+            flutter_lints: ^3.0.0
+
+          flutter:
+            uses-material-design: true
+          EOF
         shell: bash
 
       - name: Insert Full Enhanced App Code
@@ -51,7 +70,6 @@ jobs:
             WidgetsFlutterBinding.ensureInitialized();
             MobileAds.instance.initialize();
 
-            // إعدادات التنبيهات المحلية للإشعارات
             const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
             const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
             await flutterLocalNotificationsPlugin.initialize(initializationSettings);
@@ -225,7 +243,6 @@ jobs:
 
           class _LocationPermissionViewState extends State<LocationPermissionView> {
             Future<void> askPermissions() async {
-              // طلب صلاحية الموقع
               bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
               if (serviceEnabled) {
                 LocationPermission permission = await Geolocator.checkPermission();
@@ -238,7 +255,6 @@ jobs:
                 }
               }
 
-              // طلب صلاحية التنبيهات للهاتف (Android 13+)
               final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
                   flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
               if (androidImplementation != null) {
@@ -340,7 +356,6 @@ jobs:
                 likes--;
                 uIdx = (uIdx + 1) % users.length;
               });
-              // إرسال تنبيه تجريبي محلي عند وصول تفاعل أو إشارة جديدة
               _showNotification();
             }
 
