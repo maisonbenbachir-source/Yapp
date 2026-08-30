@@ -11,12 +11,6 @@ dependencies:
     sdk: flutter
   google_mobile_ads: ^5.2.0
   geolocator: ^13.0.2
-  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
-
-flutter_launcher_icons:
-  image_path: "icon.png"
-  android: true
-  ios: true
