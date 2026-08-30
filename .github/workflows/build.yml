@@ -24,7 +24,14 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Clean and Build
+      - name: Create Clean Flutter Project Structure
+        run: |
+          flutter create . --org com.yapp.app --project-name yapp
+          # نضمن بقاء كودك الخاص في مكانه الصحيح
+          mkdir -p lib
+        shell: bash
+
+      - name: Get Dependencies and Build APK
         run: |
           flutter pub get
           flutter build apk --release
