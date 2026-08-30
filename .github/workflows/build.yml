@@ -24,10 +24,9 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Get Dependencies, Generate Icon & Build
+      - name: Get Dependencies and Build
         run: |
           flutter pub get
-          flutter pub run flutter_launcher_icons:main
           flutter build apk --release
 
       - name: Upload APK
